@@ -1,0 +1,110 @@
+---
+title: "Terrorism From the 70's to 10's"
+author: "Anthony A"
+date: "9/2/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(purrr)
+library(reshape2)
+```
+
+
+# Datasets
+
+```{r data}
+repo = "https://github.com/fivethirtyeight/data/tree/master/terrorism"
+article = "https://fivethirtyeight.com/features/the-rise-of-religiously-inspired-terrorism-in-france"
+link = "https://raw.githubusercontent.com/fivethirtyeight/data/master/terrorism/eu_terrorism_fatalities_by_country.csv"
+
+terror = read.csv(link) %>%
+  dplyr::rename(Year = iyear)
+```
+
+
+# Overview
+
+By some definitions, an act of violence becomes labeled as terrorism when it is meant to inflict fear.
+The 1970's saw a significant rise in terrorism across several countries in the EU.
+The most significant death tolls between 1970 to 2014 were observed in the UK and Spain.
+
+```{r transforms}
+LogTerror <- function(df, log_base = exp(1)) {
+  df %>%
+    log(., log_base) %>%
+      { .[df == 0] = 0 ; . } %>%
+        { .[, 1] = df[, 1] ; .}
+}
+
+MeltTerror <- function(df, reference = terror, x_var = c("Year")) {
+  sapply(reference, sum) %>%
+    { which(. < 100) } %>%
+      { . * -1 } %>%
+        df[, .] %>%
+          reshape2::melt(., id = x_var, na.rm = TRUE)
+}
+
+RenameTerror <- function(df) {
+  dplyr::rename(df, Country = variable, Fatalities = value)
+}
+```
+
+
+# Exploratory Analysis
+
+Shown below is a representation of the fatalities per year for six countries that exceeded 100 deaths.
+
+```{r stackedAreaGraph}
+terror %>%
+  LogTerror(.) %>%
+    MeltTerror(.) %>%
+      RenameTerror(.) %>%
+        ggplot2::ggplot(.) +
+        ggplot2::aes(x = Year, y = Fatalities, fill = Country) +
+        ggplot2::geom_area() +
+        ggplot2::theme_classic()
+```
+
+
+# Trends
+The general trends show that terrorism declined over time, although some countries still exhibited sporadic cases every year.
+Notably, two countries with previously high death tolls did not have any incidents past 2000.
+These two countries are Ireland and Italy, whereas the other four countries have.
+
+```{r lineGraph}
+terror %>%
+  .[.$Year > 2000, ] %>%
+    LogTerror(.) %>%
+      MeltTerror(.) %>%
+        RenameTerror(.) %>%
+          ggplot2::ggplot(.) +
+          ggplot2::aes(x = Year, y = Fatalities, group = Country, color = Country) +
+          ggplot2::geom_line(size = 1.5) +
+          ggplot2::theme_classic()
+```
+
+
+# Findings and Recommendations
+It is curious that these two large countries, Italy and Ireland, have not had any cases since 1995.
+It would be worthwhile to see if there are social, political, or economic causes for this remedial action.
+
+```{r reducedLineGraph}
+terror %>%
+  LogTerror(.) %>%
+    MeltTerror(.) %>%
+      RenameTerror(.) %>%
+        .[.$Country %in% c("Italy", "Ireland"), ] %>%
+          ggplot2::ggplot(.) +
+          ggplot2::aes(x = Year, y = Fatalities, group = Country, color = Country) +
+          ggplot2::geom_line(size = 1.1) +
+          ggplot2::theme_classic()
+
+```
+
+
+#
+
