@@ -1,0 +1,152 @@
+---
+title: "Bob Ross and His Son's Inspirations"
+author: "Anthony Arroyo"
+date: "9/07/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(purrr)
+```
+
+
+# Datasets
+
+```{r data}
+repo = "https://github.com/fivethirtyeight/data/tree/master/bob-ross"
+article = "https://blog.twoinchbrush.com/article/what-happened-to-steve-ross-the-son-of-bob-ross/"
+link = "https://raw.githubusercontent.com/fivethirtyeight/data/master/bob-ross/elements-by-episode.csv"
+
+bobRoss = if (file.exists(basename(link))) {
+  read.csv(basename(link)) 
+} else { 
+  read.csv(link)
+}
+
+```
+
+# Overview
+
+Through a meticulous effort, we have a collection of qualifiers regarding the contents of Bob Ross' paintings.
+From seasons 1 through 31, we have an idea of how many lakes and mountains he has painted on television.
+Bob Ross was inspired from his stay in Alaska and his son Steve Ross perhaps inspired by Bob himself.
+An avenue of interest lies in looking for divergence from these two artists and seeing what we learn.
+
+```{r initialize}
+
+### Filters data frame for columns that are specifically integer vectors
+FilterInt <- function(df) { 
+  sapply(df, typeof) %>%
+    { which(. == "integer") } %>%
+      df[, .]
+}
+
+### Flattens a data frame and computes a sum on integer columns
+SumOccurences <- function(df) {
+  FilterInt(df) %>%
+    sapply(., sum)
+}
+
+### Normalizes a row to a percent value
+Percent <- function(x) { x / max(x) }
+
+### Generates the integer inputs for weighting the raw sparse data
+ChunkVals <- function(maxVal = 100, size = 10, keepTail = TRUE) {
+  if (maxVal[[1]] < 1 || size[[1]] < 0) return(NA)
+  len = floor(size[[1]])
+  
+  lhs = seq.int(1, maxVal[[1]], len)
+  rhs = seq.int(len, length(lhs)*len, len)
+  weight = rep(1, length(lhs))
+  
+  last_i = length(lhs)
+  rhs[last_i] = maxVal[[1]]
+  weight[last_i] = (rhs[last_i] - lhs[last_i] + 1) / min(rhs[last_i], len)
+  
+  result = data.frame(lhs = lhs, rhs = rhs, weight = weight)
+  
+  if (keepTail) {
+    return(result)
+  } else {
+    return(result[-last_i, ])
+  }
+}
+
+### Congregates sparse data into sizeable chunks, like a dataloader but not randomized
+Chunk <- function(df, n_rows = 10, keepTail = TRUE) {
+  if (purrr::is_empty(nrow(df)) || nrow(df) < 1)
+    return(warning(NA))
+  
+  data = FilterInt(df)
+  
+  ChunkVals(nrow(df), n_rows, keepTail) %>%
+    { mapply(.$lhs, .$rhs, .$weight, FUN = function(a, b, w) {
+      floor(SumOccurences(data[a:b, ]) / w)
+    })} %>%
+      t(.) %>%
+        as.data.frame(.) %>%
+          dplyr::mutate(indices = n_rows * 1:nrow(.)) %>%
+            dplyr::select(indices, dplyr::everything())
+}
+```
+
+# Initial Impressions
+
+When we tally and summarize the presence of certain features, we can draw some starting ideas.
+It is self evident that even seeing one episode means you have seen them both draw trees.
+For another example, Bob Ross only rarely draws barns and similarly, neither does Steve Ross.
+One strong contrast however, Bob Ross has much more interest drawing natural structures like cabins.
+Moreover, Steve Ross has a much stronger affinity for clouds than his father.
+
+```{r summaries}
+# Converts the sparse tallies into a percent per column by artist
+bobChoices = bobRoss %>%
+  dplyr::filter(GUEST == 0) %>%
+    SumOccurences(.)
+steveChoices = bobRoss %>%
+  dplyr::filter(STEVE_ROSS == 1) %>%
+    SumOccurences(.)
+
+# Delta (difference) between Bob and Steve
+disparity = (Percent(bobChoices) - Percent(steveChoices)) %>%
+  { print(head(., 15)) ; . }
+
+```
+
+# Visualizing our findings
+
+In order to make the nuances a bit more evident, let's graph it.
+By taking out the common themes, we notice that Bob Ross really likes to paint structures, paths, rivers, grass, and cabins.
+However, there's a second takeaway from this idea since this graph represents *disparity* between the two artists.
+Since there is a lack of human constructions, Steve Ross' work amplifies the presence of mountains, lakes, clouds, and so on.
+
+```{r ratio tm}
+### Graphs the divergence delta by filtering weak correlations and highlighting values
+reshape2::melt(disparity, value.name = "Disparity") %>% 
+  dplyr::mutate(Feature = rownames(.)) %>%
+    dplyr::mutate(who = as.numeric(disparity > 0)) %>%
+      dplyr::mutate(Artist = ifelse(who, "Bob Ross", "Steve Ross")) %>%
+        .[-which(.$Feature %in% c("GUEST", "STEVE_ROSS")), ] %>%
+          .[which(.$Disparity > 0.1 | .$Disparity < -0.1), ] %>%
+            ggplot2::ggplot(.) +
+            ggplot2::aes(y = Feature, x = Disparity, fill = Artist) +
+            ggplot2::geom_bar(stat = "identity") +
+            ggplot2::ggtitle("Diverging Preferences of the Ross Artists") +
+            ggplot2::theme_bw()
+```
+
+# Suggestions
+
+Let's reiterate that Bob Ross likes structures, paths, rivers, grass, and cabins whereas Steve Ross does not.
+All of these are hallmarks and indicators of civilization. 
+It appears that Steve Ross makes an either conscious or unconscious effort to avoid depicting humanity.
+Alternatively then, perhaps Bob Ross is more comfortable blending into society?
+It would also be reflective of the high success of the show, which is largely from his calm personality.
+Either way, it does suggest a tinge of loneliness in Steve Ross' life.
+I would be curious to know if Steve Ross would be considered as sociable or amicable among his peers as his father.
+
+
+#
