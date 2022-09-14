@@ -1,0 +1,90 @@
+---
+title: "Data Scrapping"
+author: "Anthony A"
+date: "9/12/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+library(magrittr)
+library(dplyr)
+library(stringr)
+```
+
+```{r data, warning=FALSE}
+path = "./data/"
+out = "./output/"
+file = "tournamentinfo.txt"
+rawData = readLines(paste0(path, file)) 
+```
+
+```{r createTable}
+### Imported cleaning function that I wrote another place
+.Fix <- function(x) { stringr::str_sub(x, 1, sapply(x, stringr::str_length)) }
+
+sep = "############"
+
+### Grabs the data and makes a data frame
+tourneyTable = rawData %>%
+  .Fix(.) %>% 
+    seqinr::c2s(.) %>%
+      gsub("---------+", sep, .) %>%
+        stringr::str_split(., sep) %>%
+          unlist(., FALSE) %>%
+            .[. != ""] %>%
+              sapply(., stringr::str_split, "\\|") %>%
+                lapply(., trimws)
+
+head(tourneyTable, 2)
+```
+
+```{r createDictionary}
+### Pulls from the table where appropriate to get some general stats
+eloRankings = tourneyTable %>%
+  as.data.frame(., col.names = length(tourneyTable)) %>%
+    .[, -1] %>%
+      { data.frame(
+        Pair = unlist(.[1, ]),
+        Player = unlist(.[2, ]),
+        State = unlist(.[11, ]),
+        TotalPoints = unlist(.[3, ]),
+        PreElo = gsub(".*:\\s*(\\d+).*", "\\1", unlist(.[12, ]))
+      ) } %>%
+        magrittr::set_rownames(NULL)
+
+head(eloRankings)
+```
+
+```{r compileSums}
+### Uses previous dictionary to compare elo rankings on raw table and sum them
+opposition = tourneyTable %>%
+  lapply(function(x) { 
+    x[4:10] %>% 
+      gsub("\\D", "", .) %>% 
+        .[grepl("\\d+", .)] %>%
+          sapply(., function(y) { 
+            eloRankings[[y, 5]]
+          }) %>%
+            as.numeric(.) %>%
+              { round(sum(.) / length(.)) } %>%
+                c(x[2], .)
+  }) %>%
+    { as.data.frame(do.call(rbind, .)) } %>%
+      magrittr::set_rownames(NULL) %>%
+        magrittr::set_colnames(c("Player", "AverageOpponent")) %>%
+          { .[.$Player != "Player Name", ] }
+
+head(opposition)
+```
+
+```{r writeCsv}
+### Does a left join to merge all of the data and write as csv
+dplyr::left_join(eloRankings, opposition, by = "Player") %>%
+  dplyr::select(-Pair) %>%
+    { write.csv(paste0(out, "chessElo.csv"), row.names = FALSE, quote = FALSE) ; . } %>%
+      head(.)
+```
+
+
+
+
