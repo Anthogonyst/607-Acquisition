@@ -1,6 +1,6 @@
 ---
 title: "Bob Ross and His Son's Inspirations"
-author: "Anthony Arroyo"
+author: "Anthony A"
 date: "9/07/2022"
 output: html_document
 ---
