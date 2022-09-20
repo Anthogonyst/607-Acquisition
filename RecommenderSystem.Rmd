@@ -1,0 +1,170 @@
+---
+title: "Recommender System"
+author: "Anthony A"
+date: "9/19/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(purrr)
+library(testthat)
+```
+
+# Abstract
+
+A recommender system is intended to predict the sentiment of users based on the collective population.
+In the movie streaming services such as Amazon, we can generate user recommendations for movies.
+The idea is that watchers conform to a niche so they will continue to watch and rate those movies highly.
+By finding out what half of the group liked to watch, we can predict that the other half will also be interested.
+Thus, when collective users of the same niche exist, these groups of data observations are called clusters.
+
+```{r initializes}
+### Shortens column names for printing
+ShortenTitles <- function(df, n = 12) {
+  magrittr::set_colnames(df, substring(colnames(df), 1, n))
+}
+
+### Generates an n-length vector of integers 1 through 5
+generatedVector = set.seed(8675309) %>%
+  { rnorm(240, 3, 2) } %>%
+    { . %% 5 } %>%
+      ceiling(.) %>%
+        { (function(x) {
+          deleteVals = runif(length(x)) > 0.5
+          x[deleteVals] = NA
+          return(x)
+        })(.) }
+
+### Visualizes the distribution of randomized data in a histogram
+generatedVector %>%
+  .[! is.na(.)] %>%
+    data.frame(n = .) %>%
+      ggplot2::ggplot(.) +
+      ggplot2::aes(x = n) +
+      ggplot2::geom_histogram(bins = 5L, fill = "#112446", col="grey") +
+      ggplot2::geom_density(alpha = 0.6, fill = "red")
+```
+
+# Datasets
+
+Data generation is used in lieu of actual data.
+The data has to be pruned of empty rows or else there is no baseline to estimate the customer's desires.
+As a result, a recommender system has to recommend the top 10 movies of all time for a brand new customer.
+
+```{r data, warning = FALSE}
+### Top ten movies of 1963
+movieTitles = c(
+  "Cleopatra", "How the West Was Won", "It's a Mad, Mad, Mad, Mad World",
+  "Tom Jones", "Irma la Douce", "Son of Flubber", "Charade", "Bye Bye Birdie",
+  "Come Blow Your Horn", "Move Over, Darling", "The Great Escape"
+)
+
+### Converts generated data into a matrix and removes empty rows
+data = as.data.frame(matrix(generatedVector, ncol = 6)) %>%
+  magrittr::set_colnames(., movieTitles[1:ncol(.)]) %>%
+    .[apply(., 1, function(x) { any(! is.na(x))}), ]
+
+### Check data for cleanliness on a pre-written capacity
+testthat::test_that("All rows have at least one value", {
+  testthat::expect_true(all(apply(data, 1, function(x) {
+    any(! is.na(x))
+  })))
+})
+```
+
+# Global Baselines
+
+There are three values being used to assess the recommended movie for a customer.
+The user baseline and movie baseline are the average ratings of each user and movie.
+Afterwards, we average every seen observation for the overall movie baseline.
+These are added together as such: Users + Movie - 2 * Average
+
+```{r globalBaselines}
+### Calculates the mean of each row and column
+userBaselines = apply(data, 1, mean, na.rm = TRUE)
+movieBaselines = apply(data, 2, mean, na.rm = TRUE)
+
+### Calculates the mean of every available operation
+avgMovieRating = mean(unlist(data), na.rm = TRUE)
+
+
+movieBaselines
+```
+
+# Known observations
+
+The input data shown below is a glimpse of what data is available to our recommender system.
+Each row is a unique watcher.
+These are the ratings given by users who have already watched the movies.
+
+```{r givenRatings}
+### Show the input data
+head(ShortenTitles(data))
+```
+
+# Predicted ratings
+
+After running our algorithm on all of the movies, we get a new data set where every movie has a rating.
+Generally, the expectation is that certain movies will cluster and form visible trends.
+These trends will be picked up and inquiry to the system would return the highest value unwatched movies.
+Our glimpse at the top shows fairly accurate results on the right side but completely erroneous ones on the left side.
+
+```{r artificialRatings}
+### Generates predictions from available data
+artificialRatings = matrix(-avgMovieRating, nrow = length(userBaselines), ncol = length(movieBaselines)) %>%
+  { . + movieBaselines } %>%
+    t(.) %>%
+      { . + userBaselines } %>%
+        t(.)
+
+### Show the created predictions
+data.frame(artificialRatings) %>%
+  magrittr::set_colnames(., movieTitles[1:ncol(.)]) %>%
+    ShortenTitles(.) %>%
+      format(., digits = 3) %>%
+        head(.)
+```
+
+# Model Verification
+
+It is important to verify that the predictions match the reality of the situation.
+By comparing the real data to the predicted values, we should run a statistical analysis.
+The mean and and median for this particular set makes it seem like it worked.
+However, the two extremes are +/- 4 which would be the exact *opposite* of the intended rating.
+
+```{r verification}
+### Generate data to see where historical data differs from predictions
+confusionMatrix = data %>%
+  { (function(df) {
+    x = is.na(df)
+    df[! x] = df[! x] - artificialRatings[! x]
+    df
+  })(.) }
+
+### Get summary data to understand model accuracy
+confusionMatrix[! is.na(confusionMatrix)] %>%
+  unlist(.) %>%
+    summary(.)
+```
+
+This problem is even more apparent when the data is graphed.
+There is a bell shape because the randomly generated data is normally distributed.
+However, about half of the predictions are incorrect and too far away from zero.
+Hypothetically, a real dataset would exhibit clustering and be largely close to zero.
+Since the data is random with no favored clusters, the result is also random as shown below.
+
+```{r verificationGraph}
+### Generates a visualization of model accuracy
+confusionMatrix %>%
+  unlist(.) %>%
+    .[! is.na(.)] %>%
+      data.frame(n = .) %>%
+        ggplot2::ggplot(.) +
+        ggplot2::aes(x = n) +
+        ggplot2::geom_density(adjust = 0.2, fill = "#112446") +
+        ggplot2::theme_bw()
+```
+
