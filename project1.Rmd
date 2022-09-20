@@ -9,14 +9,38 @@ output: html_document
 library(magrittr)
 library(dplyr)
 library(stringr)
+library(seqinr)
 ```
+
+# Abstract
+
+Data mining involves taking data from sources and organizing them to be more available for downstream processes.
+This might take the form of text files, webpages, or even raw byte data.
+My particular domain of expertise for the past two years involved data mining the genome.
+That being said, the form of data can be described in the Chomsky hierarchy.
+General regex is able to datamine tables because it is Chomsky Type-2: context free data.
+
+# Datasets
+
+We will be using an organized table of chess tournament rankings.
+Our pipeline will datamine this text file so that we can make a csv and add it to a database.
 
 ```{r data, warning=FALSE}
 path = "./data/"
 out = "./output/"
 file = "tournamentinfo.txt"
-rawData = readLines(paste0(path, file)) 
+url = "https://raw.githubusercontent.com/Anthogonyst/607-Acquisition/master/data/tournamentinfo.txt"
+
+### Prefer local files, otherwise read from web
+rawData = paste0(path, file) %>%
+  ifelse(file.exists(.), ., url) %>%
+    readLines(.)
 ```
+
+# Data pipeline
+
+Since our data is a table, we use a series of regex and create a large table.
+Essentially, the table is split into observations where a character denotes row and column.
 
 ```{r createTable}
 ### Imported cleaning function that I wrote another place
@@ -38,6 +62,11 @@ tourneyTable = rawData %>%
 head(tourneyTable, 2)
 ```
 
+# Creating base data
+
+Alot of data is immediately available and grabbed from our master table.
+It is organized based on specifications.
+
 ```{r createDictionary}
 ### Pulls from the table where appropriate to get some general stats
 eloRankings = tourneyTable %>%
@@ -54,6 +83,12 @@ eloRankings = tourneyTable %>%
 
 head(eloRankings)
 ```
+
+# Further data mining
+
+Generally these data mining pipelines are tailored to the individual file.
+There's some general pedagogies that can be followed but the input determines the output.
+This particular part is hardcoded and wouldn't reach production but might setup your initial database.
 
 ```{r compileSums}
 ### Uses previous dictionary to compare elo rankings on raw table and sum them
@@ -76,6 +111,11 @@ opposition = tourneyTable %>%
 
 head(opposition)
 ```
+
+# Exporting to database
+
+The final tables are joined on a primary key through left joins.
+This clean data can now produce a csv or even be inserted into a SQL database.
 
 ```{r writeCsv}
 ### Does a left join to merge all of the data and write as csv

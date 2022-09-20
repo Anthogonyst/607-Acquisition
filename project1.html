@@ -175,10 +175,26 @@ pre code {
 </div>
 
 
+<div id="abstract" class="section level1">
+<h1>Abstract</h1>
+<p>Data mining involves taking data from sources and organizing them to be more available for downstream processes. This might take the form of text files, webpages, or even raw byte data. My particular domain of expertise for the past two years involved data mining the genome. That being said, the form of data can be described in the Chomsky hierarchy. General regex is able to datamine tables because it is Chomsky Type-2: context free data.</p>
+</div>
+<div id="datasets" class="section level1">
+<h1>Datasets</h1>
+<p>We will be using an organized table of chess tournament rankings. Our pipeline will datamine this text file so that we can make a csv and add it to a database.</p>
 <pre class="r"><code>path = &quot;./data/&quot;
 out = &quot;./output/&quot;
 file = &quot;tournamentinfo.txt&quot;
-rawData = readLines(paste0(path, file)) </code></pre>
+url = &quot;https://raw.githubusercontent.com/Anthogonyst/607-Acquisition/master/data/tournamentinfo.txt&quot;
+
+### Prefer local files, otherwise read from web
+rawData = paste0(path, file) %&gt;%
+  ifelse(file.exists(.), ., url) %&gt;%
+    readLines(.)</code></pre>
+</div>
+<div id="data-pipeline" class="section level1">
+<h1>Data pipeline</h1>
+<p>Since our data is a table, we use a series of regex and create a large table. Essentially, the table is split into observations where a character denotes row and column.</p>
 <pre class="r"><code>### Imported cleaning function that I wrote another place
 .Fix &lt;- function(x) { stringr::str_sub(x, 1, sapply(x, stringr::str_length)) }
 
@@ -221,6 +237,10 @@ head(tourneyTable, 2)</code></pre>
 ## [17] &quot;B&quot;                           &quot;W&quot;                          
 ## [19] &quot;B&quot;                           &quot;W&quot;                          
 ## [21] &quot;&quot;</code></pre>
+</div>
+<div id="creating-base-data" class="section level1">
+<h1>Creating base data</h1>
+<p>Alot of data is immediately available and grabbed from our master table. It is organized based on specifications.</p>
 <pre class="r"><code>### Pulls from the table where appropriate to get some general stats
 eloRankings = tourneyTable %&gt;%
   as.data.frame(., col.names = length(tourneyTable)) %&gt;%
@@ -242,6 +262,10 @@ head(eloRankings)</code></pre>
 ## 4    4 PATRICK H SCHILLING    MI         5.5   1716
 ## 5    5          HANSHI ZUO    MI         5.5   1655
 ## 6    6         HANSEN SONG    OH         5.0   1686</code></pre>
+</div>
+<div id="further-data-mining" class="section level1">
+<h1>Further data mining</h1>
+<p>Generally these data mining pipelines are tailored to the individual file. There’s some general pedagogies that can be followed but the input determines the output. This particular part is hardcoded and wouldn’t reach production but might setup your initial database.</p>
 <pre class="r"><code>### Uses previous dictionary to compare elo rankings on raw table and sum them
 opposition = tourneyTable %&gt;%
   lapply(function(x) { 
@@ -268,6 +292,10 @@ head(opposition)</code></pre>
 ## 5 PATRICK H SCHILLING            1574
 ## 6          HANSHI ZUO            1501
 ## 7         HANSEN SONG            1519</code></pre>
+</div>
+<div id="exporting-to-database" class="section level1">
+<h1>Exporting to database</h1>
+<p>The final tables are joined on a primary key through left joins. This clean data can now produce a csv or even be inserted into a SQL database.</p>
 <pre class="r"><code>### Does a left join to merge all of the data and write as csv
 dplyr::left_join(eloRankings, opposition, by = &quot;Player&quot;) %&gt;%
   dplyr::select(-Pair) %&gt;%
@@ -282,6 +310,7 @@ dplyr::left_join(eloRankings, opposition, by = &quot;Player&quot;) %&gt;%
 ## 4 PATRICK H SCHILLING    MI         5.5   1716            1574
 ## 5          HANSHI ZUO    MI         5.5   1655            1501
 ## 6         HANSEN SONG    OH         5.0   1686            1519</code></pre>
+</div>
 
 
 
