@@ -1,0 +1,126 @@
+---
+title: "Masking the Conclusion"
+author: "Anthony A"
+date: "10/4/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+library(zoo)
+```
+
+# Abstract
+
+We do some data tidying and light feature engineering but create strikingly different visualizations.
+The conclusions that would be inferred between the two are drastic.
+However, after doing a statistical analysis, the math reveals that one is much more desirable.
+
+```{r initializes}
+```
+
+# Datasets
+
+```{r data, warning=FALSE}
+path = "./data/"
+file = "airport_trips.csv"
+url = "https://raw.githubusercontent.com/Anthogonyst/607-Acquisition/master/data/airport_trips.csv"
+
+### Prefer local files, otherwise read from web
+rawData = paste0(path, file) %>%
+  ifelse(file.exists(.), ., url) %>%
+    read.csv(.)
+```
+
+# Data Wrangling
+
+My initial input file was formatted to look pretty on a report but not so good for a database.
+After some tidying, I convert the data into a long format first.
+
+```{r cleaning}
+### Fills some empty spaces and then converts via dictionary to a long format
+flightData = rawData %>%
+  magrittr::set_colnames(., gsub("\\.", " ", colnames(.))) %>%
+    { .[. == ""] = NA ; . } %>%
+      zoo::na.locf(.) %>%
+        .[! duplicated(.), ] %>%
+          reshape2::melt(., id = c("X", "X 1")) %>%
+            magrittr::set_colnames(., c("Airline", "Status", "Airport", "Flights"))
+
+```
+
+# Initial Thoughts
+
+When I compiled my exploratory analysis into a visualization, an overly simply idea occurred to me.
+I thought that I would probably be late on 1/10 flights regardless of what airline I chose.
+Visually, both airlines seem to have equally proportionate data to their number of flights and their arrival delays.
+(Note the values of counted flights is actually the square root.)
+
+```{r exploratory}
+ggplot2::ggplot(flightData) +
+  ggplot2::aes(
+    y = Airport,
+    fill = Airline,
+    group = Airline,
+    weight = sqrt(Flights)
+  ) +
+  ggplot2::geom_bar(position = "dodge") +
+  ggplot2::labs(x = "Number of Flights (n ^ 0.5)") +
+  ggplot2::scale_fill_hue(direction = 1) +
+  ggplot2::theme_bw() +
+  ggplot2::facet_wrap(ggplot2::vars(Status), scales = "free_x")
+```
+
+# Contradictory Evidence
+
+Surprisingly, when I do the math to verify the 1/10 lateness idea, I get drastically different results.
+The first thing that gave me a bit of a spark is that San Francisco produces a deviation of trend in the graph.
+However, this is surprisingly not evident at all in the mathematical approach.
+
+```{r mathVerify}
+### Makes a 3d dataset to compare 3 features; probably not the best approach
+percentDelays = reshape2::acast(flightData, Airline ~ Airport ~ Status, value.var = "Flights") %>%
+  { .[,,1] / (.[,,1] + .[,,2]) } %>%
+    print(.) %>%
+      reshape2::melt(.) %>%
+        magrittr::set_colnames(., c("Airline", "Airport", "% Delayed"))
+
+```
+
+# Finding "The Lie" in the Data
+
+Going back, I want to understand why my graph looks so different from the calculations.
+The 1/10 number wasn't too far off but one airport is so obviously superior that you have to wonder.
+Apparently, the combination of feature engineering compresses the data and the facet draw separates it just enough to hide the trend!
+It is now clear that Alaska Airlines is superior in terms of quality, despite that AM West is much more prominent in Phoenix.
+
+```{r conclude}
+### Does a similar operation to get all of the flights combined (optional but nice for completeness)
+completeData = reshape2::acast(flightData, Airline ~ Airport ~ Status, value.var = "Flights") %>%
+  { .[,,1] + .[,,2] } %>%
+    reshape2::melt(.) %>%
+      magrittr::set_colnames(., c("Airline", "Airport", "Total Flights")) %>%
+        dplyr::left_join(percentDelays, ., by = c("Airline", "Airport")) %>%
+          dplyr::left_join(flightData, ., by = c("Airline", "Airport"))
+
+### Our join produces two rows of data respective to the two statuses, so we filter for either one
+### If we don't filter, the weight will count both rows and double its intended value
+### From a design POV, this can be completely avoided by not doing the other join but makes other analyses easier
+completeData %>%
+  dplyr::filter(Status == "ON TIME") %>%
+    ggplot2::ggplot(.) +
+    ggplot2::aes(
+      x = Airport,
+      fill = Airline,
+      group = Airline,
+      weight = `% Delayed` * 100
+    ) +
+    ggplot2::geom_bar(position = "dodge") +
+    ggplot2::scale_fill_hue(direction = 1) +
+    ggplot2::labs(y = "% Delayed Flights") +
+    ggplot2::theme_bw()
+```
+
