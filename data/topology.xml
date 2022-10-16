@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<root>
+	<book>
+		<title>Elementary Topology</title>
+		<author>O Viro</author>
+		<author>O Ivanov</author>
+		<author>V Kharlamov</author>
+		<author>N Netsvetaev</author>
+		<website>http://www.math.uu.se/~oleg/educ-texts.html</website>
+	</book>
+	<book>
+		<title>Vector Bundles and K-Theory</title>
+		<author>A Hatcher</author>
+		<website>http://www.math.cornell.edu/~hatcher</website>
+	</book>
+	<book>
+		<title>Automorphisms of Surfaces after Nielsen and Thurston</title>
+		<author>A J Casson</author>
+		<author>S A Bleiler</author>
+		<publisher>Cambridge University Press</publisher>
+		<year>1988</year>
+		<price>$15</price>
+	</book>
+</root>

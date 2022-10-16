@@ -1,0 +1,96 @@
+---
+title: "Computer Formats"
+author: "Anthony A"
+date: "10/15/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+library(magrittr)
+library(jsonlite)
+library(XML)
+```
+
+# Abstract
+
+Some classic computer formats include JSON, HTML, and XML documents.
+They are designed to conform to some specific standard to befit specific purposes.
+Generally speaking, any web technologies will use all of them.
+We will examine the same set of data in each of them.
+
+```{r initializes}
+file = "data/topology"
+url = "https://raw.githubusercontent.com/Anthogonyst/607-Acquisition/master/"
+
+### All three files are the same basename, hence the shortcut
+AppendExtension <- function(fp, ext, web) {
+  paste0(fp, ext) %>%
+    ifelse(file.exists(.), ., paste0(web, fp, ext))
+}
+
+### JSON
+jsonData = AppendExtension(file, ".json", url) %>%
+  jsonlite::read_json()
+
+### HTML
+htmlData = AppendExtension(file, ".html", url) %>%
+  XML::readHTMLTable() %>%
+    .[[1]]
+
+### XML
+xmlData = AppendExtension(file, ".xml", url) %>%
+  XML::xmlToList()
+```
+
+# HTML Data
+
+The most common form is probably HTML.
+It is a markdown language so the software interprets text and runs its own code.
+Since the web runs on it, it has some concepts like tables and paragraphs.
+There's probably a better way to do the following but I didn't want to nest a table inside a table.
+
+```{r}
+htmlData
+```
+
+# JSON Data
+
+It is probably the easiest form of data to understand JSON.
+There are really only two types available, lists and dictionaries.
+This makes tree structures that can store data and is very flexible.
+
+```{r}
+jsonData
+```
+
+# XML Data
+
+The third form is XML data. 
+It is basically the HTML version of JSON, so it will generally describe schemas.
+Basically, if you're doing a job in JSON but need to distinguish attributes from fields, this is available.
+
+```{r cleaning}
+xmlData
+```
+
+# Unlist XML/JSON looks like HTML
+
+As much as I have critique for the HTML data in the disorderly form I wrote, the other two can look alot like it.
+If you deconstruct json data, you'll find that its names look strikingly similar to the HTML.
+Additionally, the xml data will fit in exactly the same places.
+I don't recommend doing this for any practical usage but it makes you think.
+
+```{r}
+rbind(
+  unlist(jsonData),
+  unlist(xmlData)
+)
+```
+
+# Conclusions
+
+They're pretty similar, generally speaking.
+There's probably a correct way to do the HTML table but a frontend dev is meant to write that.
+The XML tree is a bit more strict so every array needs to be named.
+Hypothetically, there's ways to make cleaner tables in R but I never figured out where a clean enumerator is for that.
+Personally, I think navigating a tree structure is R's major weakness but I digress.
