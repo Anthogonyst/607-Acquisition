@@ -1,0 +1,108 @@
+---
+title: "Using NY Times Web API"
+author: "Anthony A"
+date: "11/30/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+library(magrittr)
+library(httr)
+library(jsonlite)
+```
+
+# Abstract
+
+Using the NY Times API, we can retrieve data that corresponds to our needs.
+Instead of manual web scrapping or writing emails, we can programmatically assess bestselling books.
+This is done with an HTML request which returns a JSON data structure.
+It is a highly efficient work practice that is used everyday because it makes open data accessible.
+
+```{r initializes, include=FALSE}
+apiKey = "Y9o5BDG2LUOIJGGzV6Z403e73xkqymzU"
+```
+
+# Data Sources
+
+The NY Times API is documented and can be found here:
+https://developer.nytimes.com/docs/books-product/1/overview
+
+```{r constructors}
+ConstructApiCall <- function(url, ..., key = paste0("api-key=", apiKey)) {
+  paste0(url, "?", paste(..., key, sep = "&"))
+}
+
+ApiCall <- function(url) {
+  results = httr::GET(url)
+  results$url = gsub("api-key=.*", "", results$url)
+  results$request$url = gsub("api-key=.*", "", results$request$url)
+  
+  if (results$status_code >= 100 & results$status_code <= 299) {
+    return(rawToChar(results$content))
+  } else {
+    warning(results$status_code)
+    return(rawToChar(results$content))
+  }
+}
+
+LessWords <- function(df) {
+  apply(df, 2, substring, 0L, 20L)
+}
+```
+
+# Available Datasets
+
+According to the NY Times Books API, they divide book into categories and the list is pulled through the API.
+Thus, we can use the GET /lists/names.json endpoint to get the bestsellers types of books.
+This will help us refine our search later to non-fiction.
+
+```{r data, warning = FALSE}
+timesBaseUrl = "https://api.nytimes.com/svc/books/v3/"
+
+paste0(timesBaseUrl, "/lists/names.json") %>%
+  ConstructApiCall(.) %>%
+    ApiCall(.) %>%
+      jsonlite::fromJSON(.) %>%
+        .$results %>% 
+          .[grepl("nonfiction", .[[3]], ignore.case = TRUE), ]
+```
+
+# Non-Fiction Hardcover Books
+
+Now that we know the necessary encoded name, we can construct a call on the API.
+With the GET /lists.json endpoint, we can get a vector and convert it to a data frame.
+The parameters are appended to the end of the URL to specify list and date.
+These are called query parameters.
+
+```{r verification}
+paste0(timesBaseUrl, "lists.json") %>%
+  ConstructApiCall(., "list=hardcover-nonfiction", "published-date=2014-04-20") %>%
+    ApiCall(.) %>%
+      jsonlite::fromJSON(.) %>%
+        .$results %>%
+          .$book_details %>%
+            do.call(rbind, .) %>%
+              LessWords(.) %>%
+                head(.)
+```
+
+# Ranking the Non-Fiction Hardcover Books
+
+Alternatively, they provide another endpoint where the book details are not nested.
+This is preferable for our use case if we can start with a data frame instead of making it ourselves.
+The GET /lists/{date}/{list}.json endpoint will give us all non-fiction books from 2014.
+These correspond to path parameters because they are embedded in the URL.
+Path parameters are adjusted by inserting them directly into the link as shown.
+If we had more than 20 results, an optional query parameter is provided as the offset.
+
+```{r}
+paste0(timesBaseUrl, "lists/2014-04-20/hardcover-nonfiction.json") %>%
+  ConstructApiCall(., "offset=0") %>%
+    ApiCall(.) %>%
+      jsonlite::fromJSON(.) %>%
+        .$results %>%
+          .$books %>%
+            LessWords(.) %>%
+              head(.)
+```
+
